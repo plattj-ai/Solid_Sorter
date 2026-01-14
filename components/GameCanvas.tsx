@@ -67,15 +67,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onUpdate, gameState }) => {
         const extrudeSettings = { depth: 1.4, bevelEnabled: false };
         return new THREE.ExtrudeGeometry(shape, extrudeSettings).translate(0, 0, -0.7);
       }
-      case ShapeType.WEDGE: {
-        const shape = new THREE.Shape();
-        shape.moveTo(-0.7, -0.7);
-        shape.lineTo(0.7, -0.7);
-        shape.lineTo(-0.7, 0.7);
-        shape.closePath();
-        const extrudeSettings = { depth: 1.4, bevelEnabled: false };
-        return new THREE.ExtrudeGeometry(shape, extrudeSettings).translate(0, 0, -0.7);
-      }
       case ShapeType.PARABOLOID: {
         const points = [];
         const height = 1.5;

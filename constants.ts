@@ -23,5 +23,4 @@ export const SHAPE_COLORS: Record<ShapeType, number> = {
   [ShapeType.CONE]: 0xffff00,
   [ShapeType.ROOF]: 0x33ff33,
   [ShapeType.PARABOLOID]: 0x9900ff,
-  [ShapeType.WEDGE]: 0x00ffff, // Cyan Wedge
 };

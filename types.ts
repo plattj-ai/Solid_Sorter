@@ -6,8 +6,7 @@ export enum ShapeType {
   TORUS = 'TORUS',
   CONE = 'CONE',
   ROOF = 'ROOF',
-  PARABOLOID = 'PARABOLOID',
-  WEDGE = 'WEDGE'
+  PARABOLOID = 'PARABOLOID'
 }
 
 export interface GameObject {

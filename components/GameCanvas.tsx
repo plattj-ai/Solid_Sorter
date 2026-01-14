@@ -149,7 +149,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onUpdate, gameState }) => {
     renderer.toneMapping = THREE.ReinhardToneMapping;
     mountRef.current.appendChild(renderer.domElement);
 
-    // FIXED: Camera setup to match specification
     const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.set(0, 30, 45);
     camera.lookAt(0, 0, -10);
@@ -225,7 +224,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onUpdate, gameState }) => {
     const wallT = 0.2;
     const binW = 4, binH = 3, binD = 5;
 
-    const parts = [
+    // Fixed: Explicitly typed as tuples [number, number, number] to solve TS2556
+    const parts: { geo: [number, number, number], pos: [number, number, number] }[] = [
       { geo: [binW, wallT, binD], pos: [0, -binH / 2 + wallT / 2, 0] },
       { geo: [binW, binH, wallT], pos: [0, 0, -binD / 2 + wallT / 2] },
       { geo: [binW, binH, wallT], pos: [0, 0, binD / 2 - wallT / 2] },

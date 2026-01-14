@@ -1,0 +1,5 @@
+{
+  "name": "Solid Sorter",
+  "description": "A retro-arcade cyber-factory sorting game using Three.js with a one-point perspective and CRT effects.",
+  "requestFramePermissions": []
+}

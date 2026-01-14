@@ -8,7 +8,6 @@ import {
 } from '../types';
 import { 
   BELT_Z_POSITIONS, 
-  BELT_START_X, 
   BELT_END_X, 
   BELT_Y,
   CHUTE_X,
@@ -35,16 +34,14 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onUpdate, gameState }) => {
   const activeTimeRef = useRef<number>(0);
   const speedRef = useRef<number>(INITIAL_SPEED);
   
-  // Logic for guaranteeing target shape within 5 seconds
   const lastTargetRef = useRef<ShapeType>(gameState.targetShape);
-  const targetDeadlineRef = useRef<number>(5); // Target must appear by this activeTime
+  const targetDeadlineRef = useRef<number>(5);
 
   const gameStateRef = useRef<GameState>(gameState);
   useEffect(() => {
-    // If target shape changed, reset the 5s deadline
     if (gameState.targetShape !== lastTargetRef.current) {
       lastTargetRef.current = gameState.targetShape;
-      targetDeadlineRef.current = activeTimeRef.current + 4.8; // 4.8s buffer to ensure it starts spawning
+      targetDeadlineRef.current = activeTimeRef.current + 4.8;
     }
     gameStateRef.current = gameState;
   }, [gameState]);
@@ -66,6 +63,15 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onUpdate, gameState }) => {
         shape.moveTo(-0.7, -0.7);
         shape.lineTo(0.7, -0.7);
         shape.lineTo(0, 0.7);
+        shape.closePath();
+        const extrudeSettings = { depth: 1.4, bevelEnabled: false };
+        return new THREE.ExtrudeGeometry(shape, extrudeSettings).translate(0, 0, -0.7);
+      }
+      case ShapeType.WEDGE: {
+        const shape = new THREE.Shape();
+        shape.moveTo(-0.7, -0.7);
+        shape.lineTo(0.7, -0.7);
+        shape.lineTo(-0.7, 0.7);
         shape.closePath();
         const extrudeSettings = { depth: 1.4, bevelEnabled: false };
         return new THREE.ExtrudeGeometry(shape, extrudeSettings).translate(0, 0, -0.7);
@@ -92,21 +98,18 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onUpdate, gameState }) => {
   };
 
   const spawnObjectInLane = (currentScene: THREE.Scene, beltIndex: number) => {
-    // Determine type: Force target if deadline passed
     let type: ShapeType;
     if (activeTimeRef.current >= targetDeadlineRef.current) {
       type = gameStateRef.current.targetShape;
-      targetDeadlineRef.current = activeTimeRef.current + 5.0; // Reset deadline
+      targetDeadlineRef.current = activeTimeRef.current + 5.0;
     } else {
       type = SHAPE_TYPES[Math.floor(Math.random() * SHAPE_TYPES.length)];
-      // If we happened to spawn the target randomly, push the deadline back
       if (type === gameStateRef.current.targetShape) {
         targetDeadlineRef.current = activeTimeRef.current + 5.0;
       }
     }
 
     const id = Math.random().toString(36).substr(2, 9);
-    
     const geometry = createGeometry(type);
     const material = new THREE.MeshPhongMaterial({ 
       color: SHAPE_COLORS[type], 
@@ -121,7 +124,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onUpdate, gameState }) => {
     mesh.castShadow = true;
     currentScene.add(mesh);
     
-    // Apply belt-specific speed factors to prevent objects from aligning (0.9x, 1.0x, 1.1x)
     const laneSpeed = speedRef.current * (0.9 + beltIndex * 0.1);
     
     const data: GameObject = {
@@ -147,9 +149,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onUpdate, gameState }) => {
     renderer.toneMapping = THREE.ReinhardToneMapping;
     mountRef.current.appendChild(renderer.domElement);
 
+    // FIXED: Camera setup to match specification
     const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 20, 30);
-    camera.lookAt(0, 2, 0);
+    camera.position.set(0, 30, 45);
+    camera.lookAt(0, 0, -10);
 
     const scene = sceneRef.current;
     scene.background = new THREE.Color(0x020205);
@@ -164,15 +167,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onUpdate, gameState }) => {
     dirLight.shadow.mapSize.height = 2048;
     scene.add(dirLight);
 
-    const dropSpot = new THREE.SpotLight(0x00ffff, 1000, 50, Math.PI / 4, 0.5);
-    dropSpot.position.set(5, 20, 0);
-    dropSpot.target.position.set(5, 0, 0);
-    scene.add(dropSpot);
-    scene.add(dropSpot.target);
-
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(120, 120),
-      new THREE.MeshPhongMaterial({ color: 0x000000 })
+      new THREE.MeshPhongMaterial({ color: 0x050505 })
     );
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
@@ -184,12 +181,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onUpdate, gameState }) => {
 
     const backdrop = new THREE.Mesh(
       new THREE.PlaneGeometry(150, 60),
-      new THREE.MeshPhongMaterial({ color: 0x050510 })
+      new THREE.MeshPhongMaterial({ color: 0x030308 })
     );
     backdrop.position.set(0, 20, -25);
     scene.add(backdrop);
 
-    // Create Chutes
     BELT_Z_POSITIONS.forEach((z) => {
       const chuteGeo = new THREE.CylinderGeometry(1.2, 1.2, 4, 32);
       const chuteMat = new THREE.MeshPhongMaterial({ color: 0x444444, shininess: 80 });
@@ -209,25 +205,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onUpdate, gameState }) => {
       belt.receiveShadow = true;
       beltGroup.add(belt);
 
-      const legGeo = new THREE.BoxGeometry(0.5, BELT_Y, 0.5);
-      const legMat = new THREE.MeshPhongMaterial({ color: 0x222222 });
-      
-      const leg1 = new THREE.Mesh(legGeo, legMat);
-      leg1.position.set(-14, (BELT_Y / 2) - 0.5, z - 2);
-      beltGroup.add(leg1);
-
-      const leg2 = new THREE.Mesh(legGeo, legMat);
-      leg2.position.set(-14, (BELT_Y / 2) - 0.5, z + 2);
-      beltGroup.add(leg2);
-
-      const leg3 = new THREE.Mesh(legGeo, legMat);
-      leg3.position.set(4, (BELT_Y / 2) - 0.5, z - 2);
-      beltGroup.add(leg3);
-
-      const leg4 = new THREE.Mesh(legGeo, legMat);
-      leg4.position.set(4, (BELT_Y / 2) - 0.5, z + 2);
-      beltGroup.add(leg4);
-
       const stripes = new THREE.Mesh(
         new THREE.PlaneGeometry(22, 0.6),
         new THREE.MeshBasicMaterial({ color: 0xdddd00, side: THREE.DoubleSide })
@@ -244,46 +221,24 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onUpdate, gameState }) => {
     });
 
     const binGroup = new THREE.Group();
-    const binMaterial = new THREE.MeshStandardMaterial({ 
-      color: 0x0088ff, 
-      roughness: 0.3,
-      metalness: 0.2
+    const binMaterial = new THREE.MeshStandardMaterial({ color: 0x0088ff, roughness: 0.3 });
+    const wallT = 0.2;
+    const binW = 4, binH = 3, binD = 5;
+
+    const parts = [
+      { geo: [binW, wallT, binD], pos: [0, -binH / 2 + wallT / 2, 0] },
+      { geo: [binW, binH, wallT], pos: [0, 0, -binD / 2 + wallT / 2] },
+      { geo: [binW, binH, wallT], pos: [0, 0, binD / 2 - wallT / 2] },
+      { geo: [wallT, binH, binD], pos: [-binW / 2 + wallT / 2, 0, 0] },
+      { geo: [wallT, binH, binD], pos: [binW / 2 - wallT / 2, 0, 0] },
+    ];
+
+    parts.forEach(p => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(...p.geo), binMaterial);
+      m.position.set(...p.pos);
+      m.castShadow = true;
+      binGroup.add(m);
     });
-    
-    const wallThickness = 0.2;
-    const binW = 4;
-    const binH = 3;
-    const binD = 5;
-
-    const bottomMesh = new THREE.Mesh(new THREE.BoxGeometry(binW, wallThickness, binD), binMaterial);
-    bottomMesh.position.y = -binH / 2 + wallThickness / 2;
-    bottomMesh.castShadow = true;
-    bottomMesh.receiveShadow = true;
-    binGroup.add(bottomMesh);
-
-    const frontMesh = new THREE.Mesh(new THREE.BoxGeometry(binW, binH, wallThickness), binMaterial);
-    frontMesh.position.z = -binD / 2 + wallThickness / 2;
-    frontMesh.castShadow = true;
-    frontMesh.receiveShadow = true;
-    binGroup.add(frontMesh);
-
-    const backMesh = new THREE.Mesh(new THREE.BoxGeometry(binW, binH, wallThickness), binMaterial);
-    backMesh.position.z = binD / 2 - wallThickness / 2;
-    backMesh.castShadow = true;
-    backMesh.receiveShadow = true;
-    binGroup.add(backMesh);
-
-    const leftMesh = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, binH, binD), binMaterial);
-    leftMesh.position.x = -binW / 2 + wallThickness / 2;
-    leftMesh.castShadow = true;
-    leftMesh.receiveShadow = true;
-    binGroup.add(leftMesh);
-
-    const rightMesh = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, binH, binD), binMaterial);
-    rightMesh.position.x = binW / 2 - wallThickness / 2;
-    rightMesh.castShadow = true;
-    rightMesh.receiveShadow = true;
-    binGroup.add(rightMesh);
     
     binGroup.position.set(PLAYER_X, 2.5, gameStateRef.current.playerZ);
     scene.add(binGroup);
@@ -294,12 +249,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onUpdate, gameState }) => {
       const delta = clock.getDelta();
       const currentGS = gameStateRef.current;
 
-      // Only run game loop if started
       if (currentGS.gameStarted && !currentGS.gameOver && !currentGS.isPaused) {
         activeTimeRef.current += delta;
         const totalActiveTime = activeTimeRef.current;
 
-        // Lane monitoring: count active objects per belt
         const laneCounts = [0, 0, 0];
         const laneMinX = [Infinity, Infinity, Infinity];
         
@@ -310,59 +263,35 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onUpdate, gameState }) => {
           }
         });
 
-        // Maintain 1-3 objects per belt
         for (let i = 0; i < 3; i++) {
           if (laneCounts[i] < 3) {
-            // Distance check to avoid overlapping at spawn
-            const clearingDistance = 7; 
-            const canSpawn = laneCounts[i] === 0 || laneMinX[i] > CHUTE_X + clearingDistance;
+            const canSpawn = (laneCounts[i] === 0 || laneMinX[i] > CHUTE_X + 7);
+            const isInitialStaggered = (i !== 1 && totalActiveTime < 3.0);
             
-            if (canSpawn) {
-              // Staggered start logic:
-              // Lane 1 (middle) can spawn immediately.
-              // Lane 0 and 2 wait until game has been running for at least 3 seconds.
-              const isInitialStaggered = (i !== 1 && totalActiveTime < 3.0);
-              
-              if (!isInitialStaggered) {
-                // If lane is empty, spawn immediately. 
-                // If lane has objects but is below max, spawn with a small random staggered delay
-                if (laneCounts[i] === 0 || Math.random() < 0.02) {
-                  spawnObjectInLane(scene, i);
-                  speedRef.current += 0.005; // Gentle speed scaling
-                }
+            if (canSpawn && !isInitialStaggered) {
+              if (laneCounts[i] === 0 || Math.random() < 0.02) {
+                spawnObjectInLane(scene, i);
+                speedRef.current += 0.005;
               }
             }
           }
         }
 
         if (playerMeshRef.current) {
-          playerMeshRef.current.position.z = THREE.MathUtils.lerp(
-            playerMeshRef.current.position.z, 
-            currentGS.playerZ, 
-            0.25
-          );
+          playerMeshRef.current.position.z = THREE.MathUtils.lerp(playerMeshRef.current.position.z, currentGS.playerZ, 0.25);
           playerMeshRef.current.position.y = 2.5 + Math.sin(totalActiveTime * 2) * 0.1;
         }
 
         objectsRef.current.forEach((val, id) => {
           const { mesh, data } = val;
-          
           if (data.isSpawning) {
             data.velocity.y += GRAVITY * delta;
             data.position.y += data.velocity.y * delta;
             data.position.x += 2 * delta; 
-            
-            if (data.position.y <= LANDING_Y) {
-              data.position.y = LANDING_Y;
-              data.velocity.y = 0;
-              data.isSpawning = false;
-            }
+            if (data.position.y <= LANDING_Y) { data.position.y = LANDING_Y; data.velocity.y = 0; data.isSpawning = false; }
           } else if (!data.isFalling) {
             data.position.x += data.velocity.x * delta;
-            if (data.position.x > BELT_END_X) {
-              data.isFalling = true;
-              data.velocity.y = 6; 
-            }
+            if (data.position.x > BELT_END_X) { data.isFalling = true; data.velocity.y = 6; }
           } else {
             data.velocity.y += GRAVITY * delta;
             data.position.y += data.velocity.y * delta;
@@ -374,12 +303,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onUpdate, gameState }) => {
           mesh.rotation.z += delta * 1.5;
 
           if (data.isFalling && data.position.y < 4.0 && data.position.y > 0) {
-            const distZ = Math.abs(data.position.z - currentGS.playerZ);
-            const distX = Math.abs(data.position.x - PLAYER_X);
-            
-            if (distX < 2 && distZ < 2.5) {
-              const isCorrect = data.type === currentGS.targetShape;
-              onUpdate(isCorrect ? 100 : 0, isCorrect ? 0 : -1, true, data.type);
+            if (Math.abs(data.position.z - currentGS.playerZ) < 2.5 && Math.abs(data.position.x - PLAYER_X) < 2) {
+              onUpdate(data.type === currentGS.targetShape ? 100 : 0, data.type === currentGS.targetShape ? 0 : -1, true, data.type);
               scene.remove(mesh);
               objectsRef.current.delete(id);
               return;
@@ -387,18 +312,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onUpdate, gameState }) => {
           }
 
           if (data.position.y < -2) {
-            const isCorrect = data.type === currentGS.targetShape;
-            onUpdate(0, isCorrect ? -1 : 0, false, data.type);
+            onUpdate(0, data.type === currentGS.targetShape ? -1 : 0, false, data.type);
             scene.remove(mesh);
             objectsRef.current.delete(id);
           }
         });
-      } else if (!currentGS.gameStarted) {
-        // Subtle background idle movement even when not started
-        const time = clock.getElapsedTime();
-        if (playerMeshRef.current) {
-          playerMeshRef.current.position.y = 2.5 + Math.sin(time * 0.5) * 0.05;
-        }
       }
 
       renderer.render(scene, camera);
@@ -417,12 +335,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onUpdate, gameState }) => {
     return () => {
       cancelAnimationFrame(requestRef.current);
       window.removeEventListener('resize', handleResize);
-      if (mountRef.current) {
-        mountRef.current.removeChild(renderer.domElement);
-      }
-      objectsRef.current.forEach(({ mesh }) => scene.remove(mesh));
-      objectsRef.current.clear();
-      scene.remove(binGroup);
+      if (mountRef.current) mountRef.current.removeChild(renderer.domElement);
     };
   }, [onUpdate]);
 

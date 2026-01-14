@@ -224,7 +224,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onUpdate, gameState }) => {
     const wallT = 0.2;
     const binW = 4, binH = 3, binD = 5;
 
-    // Fixed: Explicitly typed as tuples [number, number, number] to solve TS2556
     const parts: { geo: [number, number, number], pos: [number, number, number] }[] = [
       { geo: [binW, wallT, binD], pos: [0, -binH / 2 + wallT / 2, 0] },
       { geo: [binW, binH, wallT], pos: [0, 0, -binD / 2 + wallT / 2] },
@@ -239,6 +238,19 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onUpdate, gameState }) => {
       m.castShadow = true;
       binGroup.add(m);
     });
+
+    // Visual Sweet Spot
+    const targetZoneGeo = new THREE.PlaneGeometry(1.6, 1.6);
+    const targetZoneMat = new THREE.MeshBasicMaterial({ 
+      color: 0x00ffff, 
+      transparent: true, 
+      opacity: 0.3, 
+      side: THREE.DoubleSide 
+    });
+    const targetZone = new THREE.Mesh(targetZoneGeo, targetZoneMat);
+    targetZone.rotation.x = -Math.PI / 2;
+    targetZone.position.y = -binH / 2 + wallT + 0.05;
+    binGroup.add(targetZone);
     
     binGroup.position.set(PLAYER_X, 2.5, gameStateRef.current.playerZ);
     scene.add(binGroup);
@@ -246,7 +258,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onUpdate, gameState }) => {
 
     const clock = new THREE.Clock();
     const animate = () => {
-      const delta = clock.getDelta();
+      const delta = Math.min(clock.getDelta(), 0.1); 
       const currentGS = gameStateRef.current;
 
       if (currentGS.gameStarted && !currentGS.gameOver && !currentGS.isPaused) {
@@ -280,6 +292,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onUpdate, gameState }) => {
         if (playerMeshRef.current) {
           playerMeshRef.current.position.z = THREE.MathUtils.lerp(playerMeshRef.current.position.z, currentGS.playerZ, 0.25);
           playerMeshRef.current.position.y = 2.5 + Math.sin(totalActiveTime * 2) * 0.1;
+          const pulse = (Math.sin(totalActiveTime * 5) + 1) / 4 + 0.1;
+          playerMeshRef.current.children.forEach(child => {
+            if (child instanceof THREE.Mesh && child.geometry instanceof THREE.PlaneGeometry && child.geometry.parameters.width === 1.6) {
+              (child.material as THREE.MeshBasicMaterial).opacity = pulse;
+            }
+          });
         }
 
         objectsRef.current.forEach((val, id) => {
@@ -291,7 +309,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onUpdate, gameState }) => {
             if (data.position.y <= LANDING_Y) { data.position.y = LANDING_Y; data.velocity.y = 0; data.isSpawning = false; }
           } else if (!data.isFalling) {
             data.position.x += data.velocity.x * delta;
-            if (data.position.x > BELT_END_X) { data.isFalling = true; data.velocity.y = 6; }
+            if (data.position.x > BELT_END_X) { 
+              data.isFalling = true; 
+              data.velocity.y = 14; 
+            }
           } else {
             data.velocity.y += GRAVITY * delta;
             data.position.y += data.velocity.y * delta;
@@ -302,9 +323,23 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onUpdate, gameState }) => {
           mesh.rotation.x += delta * 3;
           mesh.rotation.z += delta * 1.5;
 
-          if (data.isFalling && data.position.y < 4.0 && data.position.y > 0) {
-            if (Math.abs(data.position.z - currentGS.playerZ) < 2.5 && Math.abs(data.position.x - PLAYER_X) < 2) {
-              onUpdate(data.type === currentGS.targetShape ? 100 : 0, data.type === currentGS.targetShape ? 0 : -1, true, data.type);
+          // REFINED COLLISION LOGIC: ONLY SWEET SPOT COUNTS
+          if (data.isFalling && data.position.y < 5.0 && data.position.y > 0.5) {
+            const dz = Math.abs(data.position.z - currentGS.playerZ);
+            const dx = Math.abs(data.position.x - PLAYER_X);
+            
+            const isTarget = data.type === currentGS.targetShape;
+            const inSweetSpot = (dz < 1.0 && dx < 1.2); 
+            const inRim = (dz < 2.5 && dx < 2.2);
+
+            if (inSweetSpot) {
+              // ONLY THE SWEET SPOT COUNTS (GOOD OR BAD)
+              onUpdate(isTarget ? 100 : -50, isTarget ? 0 : -1, true, data.type);
+              scene.remove(mesh);
+              objectsRef.current.delete(id);
+              return;
+            } else if (inRim) {
+              // IGNORE ANY OTHER CONTACTS: Silent removal for target or non-target
               scene.remove(mesh);
               objectsRef.current.delete(id);
               return;
@@ -312,6 +347,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onUpdate, gameState }) => {
           }
 
           if (data.position.y < -2) {
+            // MISS: If correct shape hits floor, still count as a life loss
             onUpdate(0, data.type === currentGS.targetShape ? -1 : 0, false, data.type);
             scene.remove(mesh);
             objectsRef.current.delete(id);
